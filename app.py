@@ -2,7 +2,8 @@ from flask import Flask, render_template, request, send_file
 from pymongo import MongoClient
 import csv
 from io import StringIO
-from pdf_service import generate_seating_pdf
+# Import both PDF generation functions from your service file
+from pdf_service import generate_seating_pdf, generate_attendance_pdf
 from datetime import datetime
 from seating_logic import allocate_seating
 
@@ -44,9 +45,9 @@ def admin_upload():
                 try:
                     content = file.stream.read().decode("utf-8")
                     reader = csv.DictReader(StringIO(content))
-                    required_fields = {"student_id", "dept", "year", "div"}
+                    required_fields = {"student_id", "dept", "year", "div", "name"}
                     if not required_fields.issubset(reader.fieldnames or []):
-                        error = "Students CSV must contain columns: student_id, dept, year, div."
+                        error = "Students CSV must contain columns: student_id, dept, year, div, name."
                     else:
                         docs = []
                         for row in reader:
@@ -57,6 +58,7 @@ def admin_upload():
                                 "dept": row["dept"].strip(),
                                 "year": int(row["year"]),
                                 "div": row["div"].strip(),
+                                "name": row["name"].upper(),
                                 "room_no": None,
                                 "seat_no": None,
                             }
@@ -112,11 +114,8 @@ def admin_upload():
 def admin_allocate():
     """
     Admin dashboard for seating.
-    Triggers allocation (if needed) but does not expose individual
-    student details in the UI.
+    Runs the logic that ensures sequential vertical and randomized horizontal seating.
     """
-    # Run allocation so that any newly uploaded/updated data is seated.
-    # The returned table is ignored here to keep details hidden.
     allocate_seating(db)
     last_generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return render_template("admin_allocate.html", last_generated=last_generated)
@@ -125,15 +124,27 @@ def admin_allocate():
 @app.route("/admin/download-seating-pdf")
 def download_seating_pdf():
     """
-    Generate and download a PDF of the current seating arrangement,
-    organized by room_no.
+    Generate and download a PDF of the current seating arrangement (Room Matrix).
     """
     pdf_buffer = generate_seating_pdf(db)
     return send_file(
         pdf_buffer,
         mimetype="application/pdf",
         as_attachment=True,
-        download_name="exam_seating.pdf",
+        download_name="exam_seating_plan.pdf",
+    )
+
+@app.route("/admin/download-attendance-pdf")
+def download_attendance_pdf():
+    """
+    Generate and download the attendance sheets (Sequential by class/ID).
+    """
+    pdf_buffer = generate_attendance_pdf(db)
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name="attendance_sheets.pdf",
     )
 
 if __name__ == '__main__':

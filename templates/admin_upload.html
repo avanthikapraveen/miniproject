@@ -1,68 +1,93 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin - Upload CSVs</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <h1>Smart Class Timetable & Exam Hall Seating Management System</h1>
-            <h2>Admin - Upload Data</h2>
-        </div>
+      <div class="header">
+        <h1>Exam Hall Seating Management System</h1>
+        <h2>Admin - Upload Data</h2>
+      </div>
 
-        {% if error %}
-        <div class="error-message">
-            {{ error }}
-        </div>
-        {% endif %}
+      {% if error %}
+      <div class="error-message">{{ error }}</div>
+      {% endif %} {% if message %}
+      <div class="success-message">{{ message }}</div>
+      {% endif %}
 
-        {% if message %}
-        <div class="success-message">
-            {{ message }}
+      <div class="result-box">
+        <div class="result-header">
+          <h3>Upload Students CSV</h3>
         </div>
-        {% endif %}
-
-        <div class="result-box">
-            <div class="result-header">
-                <h3>Upload Students CSV</h3>
+        <div class="result-content">
+          <form
+            action="{{ url_for('admin_upload') }}"
+            method="POST"
+            enctype="multipart/form-data"
+          >
+            <div class="form-group">
+              <label for="students_csv"
+                >Students CSV (student_id, dept, year, div, name):</label
+              >
+              <input
+                type="file"
+                id="students_csv"
+                name="students_csv"
+                accept=".csv"
+                required
+              />
             </div>
-            <div class="result-content">
-                <form action="{{ url_for('admin_upload') }}" method="POST" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <label for="students_csv">Students CSV (student_id, dept, year):</label>
-                        <input type="file" id="students_csv" name="students_csv" accept=".csv" required>
-                    </div>
-                    <button type="submit" name="upload_students" class="btn-search">Upload Students</button>
-                </form>
-            </div>
+            <button type="submit" name="upload_students" class="btn-search">
+              Upload Students
+            </button>
+          </form>
         </div>
+      </div>
 
-        <div class="result-box" style="margin-top: 20px;">
-            <div class="result-header">
-                <h3>Upload Halls CSV</h3>
-            </div>
-            <div class="result-content">
-                <form action="{{ url_for('admin_upload') }}" method="POST" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <label for="halls_csv">Halls CSV (room_no, capacity, no_of_rows, no_of_columns):</label>
-                        <input type="file" id="halls_csv" name="halls_csv" accept=".csv" required>
-                    </div>
-                    <button type="submit" name="upload_halls" class="btn-search">Upload Halls</button>
-                </form>
-            </div>
+      <div class="result-box" style="margin-top: 20px">
+        <div class="result-header">
+          <h3>Upload Halls CSV</h3>
         </div>
+        <div class="result-content">
+          <form
+            action="{{ url_for('admin_upload') }}"
+            method="POST"
+            enctype="multipart/form-data"
+          >
+            <div class="form-group">
+              <label for="halls_csv"
+                >Halls CSV (room_no, capacity, no_of_rows,
+                no_of_columns):</label
+              >
+              <input
+                type="file"
+                id="halls_csv"
+                name="halls_csv"
+                accept=".csv"
+                required
+              />
+            </div>
+            <button type="submit" name="upload_halls" class="btn-search">
+              Upload Halls
+            </button>
+          </form>
+        </div>
+      </div>
 
-        <div class="footer" style="margin-top: 30px;">
-            <p>
-                After uploading students and halls, go to
-                <a href="{{ url_for('admin_allocate') }}">Allocation View</a>
-                to generate seating.
-            </p>
-        </div>
+      <div class="footer" style="margin-top: 30px">
+        <p>
+          After uploading students and halls, go to
+          <a href="{{ url_for('admin_allocate') }}">Allocation View</a>
+          to generate seating.
+        </p>
+      </div>
     </div>
-</body>
+  </body>
 </html>
-
