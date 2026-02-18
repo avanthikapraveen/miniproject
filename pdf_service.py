@@ -29,7 +29,8 @@ def generate_seating_pdf(db: Database) -> BytesIO:
     """
     Generates the Seating Matrix PDF in PORTRAIT mode.
     - Each room falls on a separate paper.
-    - Explicit padding added to prevent TypeError: int + NoneType.
+    - Scales dynamically to the number of columns provided in the room config.
+    - Fixed padding and row heights for professional appearance.
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -47,9 +48,11 @@ def generate_seating_pdf(db: Database) -> BytesIO:
 
     story: List[Any] = []
 
+    # Map rooms by room_no for quick lookup of layout
     rooms_map = {r["room_no"]: {"rows": int(r["no_of_rows"]), "cols": int(r["no_of_columns"])} 
                  for r in db.rooms.find({})}
 
+    # Group students by their assigned room
     students_by_room = defaultdict(list)
     for s in db.students.find({"room_no": {"$ne": None}}):
         students_by_room[s["room_no"]].append(s)
@@ -60,6 +63,7 @@ def generate_seating_pdf(db: Database) -> BytesIO:
         buffer.seek(0)
         return buffer
 
+    # Process rooms in sorted order
     sorted_rooms = sorted(students_by_room.keys())
     for i, room_no in enumerate(sorted_rooms):
         room_cfg = rooms_map.get(room_no)
@@ -71,16 +75,18 @@ def generate_seating_pdf(db: Database) -> BytesIO:
         for s in students_by_room[room_no]:
             col_idx, row_idx = _parse_seat(str(s.get("seat_no")))
             if col_idx is not None and 0 <= col_idx < cols and 0 <= row_idx < rows:
+                # Displays student ID/Reg No and the seat label in the cell
                 grid[row_idx][col_idx] = f"{s.get('student_id')}\n({s.get('seat_no')})"
 
+        # Create table header (A, B, C...) and row labels (1, 2, 3...)
         header_row = [""] + [chr(ord("A") + c) for c in range(cols)]
         table_data = [header_row] + [[str(r + 1)] + grid[r] for r in range(rows)]
 
-        # --- SCALE MATRIX TO FILL A4 ---
+        # --- DYNAMIC SCALING ---
+        # A4 width is 595. With 30pt margins, we have 535pt available.
         available_width = 535 
         col_width = available_width / (cols + 1)
         
-        # Use rowHeights argument instead of _argH to avoid internal NoneType issues
         row_heights = [35] * len(table_data)
         table = Table(table_data, colWidths=[col_width] * (cols + 1), rowHeights=row_heights, repeatRows=1)
         
@@ -89,13 +95,13 @@ def generate_seating_pdf(db: Database) -> BytesIO:
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            # FIX: Explicit padding prevents the TypeError crash
+            ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
             ("TOPPADDING", (0, 0), (-1, -1), 5),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
 
-        story.append(Paragraph(f"Room Arrangement: {room_no}", heading_style))
+        story.append(Paragraph(f"Seating Arrangement Matrix: Room {room_no}", heading_style))
         story.append(Spacer(1, 15))
         story.append(table)
         
@@ -106,10 +112,13 @@ def generate_seating_pdf(db: Database) -> BytesIO:
     buffer.seek(0)
     return buffer
 
+
+
 def generate_attendance_pdf(db: Database) -> BytesIO:
     """
     Generates a Room-wise Attendance Sheet.
-    - Updated with explicit padding for safety.
+    - Adaptive: Uses 'Div' for Regular and 'Dept' for First Year/University.
+    - Includes invigilator signature area and absentee logs once per room.
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -128,9 +137,10 @@ def generate_attendance_pdf(db: Database) -> BytesIO:
 
     story: List[Any] = []
 
+    # Sort students for sequential listing in attendance sheets
     cursor = db.students.find({"room_no": {"$ne": None}}).sort([
         ("room_no", 1),
-        ("div", 1),
+        ("dept", 1),
         ("student_id", 1)
     ])
 
@@ -150,6 +160,7 @@ def generate_attendance_pdf(db: Database) -> BytesIO:
         story.append(Paragraph("EXAM ATTENDANCE SHEET", title_style))
         story.append(Spacer(1, 10))
 
+        # Top Header Table
         header_data = [[f"Room No: {room_no}", "Date: ____________________"]]
         header_table = Table(header_data, colWidths=[235, 235])
         header_table.setStyle(TableStyle([
@@ -161,17 +172,27 @@ def generate_attendance_pdf(db: Database) -> BytesIO:
         story.append(header_table)
         story.append(Spacer(1, 15))
 
-        table_data = [["Sr. No", "Div", "Student ID", "Student Name", "Signature"]]
+        # Check if the dataset is 'Regular' (has division) or 'First Year/University'
+        has_div = any(s.get("div") for s in students)
+        
+        if has_div:
+            table_data = [["Sr. No", "Div", "ID / Reg No", "Student Name", "Signature"]]
+        else:
+            table_data = [["Sr. No", "Dept", "ID / Reg No", "Student Name", "Signature"]]
+
         for i, s in enumerate(students, 1):
+            # Fallback to Dept if Div is not present
+            col_2_val = s.get("div") if has_div else s.get("dept")
             table_data.append([
                 str(i),
-                str(s.get("div", "")),
+                str(col_2_val or "-"),
                 str(s.get("student_id", "")),
                 str(s.get("name", "")),
                 "" 
             ])
 
-        table = Table(table_data, colWidths=[35, 35, 90, 200, 110], repeatRows=1)
+        # Column widths: Sr(35), Div/Dept(45), ID(90), Name(190), Signature(110)
+        table = Table(table_data, colWidths=[35, 45, 90, 190, 110], repeatRows=1)
         table.setStyle(TableStyle([
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
@@ -187,6 +208,7 @@ def generate_attendance_pdf(db: Database) -> BytesIO:
         story.append(table)
         story.append(Spacer(1, 30))
 
+        # Bottom Footer for Invigilator notes
         footer_data = [
             [Paragraph(f"<b>Invigilator Name:</b> ____________________", normal_style), 
              Paragraph(f"<b>Signature:</b> ____________________", normal_style)],

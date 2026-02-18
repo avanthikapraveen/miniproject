@@ -2,10 +2,12 @@ from flask import Flask, render_template, request, send_file
 from pymongo import MongoClient
 import csv
 from io import StringIO
-# Import both PDF generation functions from your service file
 from pdf_service import generate_seating_pdf, generate_attendance_pdf
 from datetime import datetime
 from seating_logic import allocate_seating
+# Import all logic modules
+from seating_logic_firstyear import allocate_firstyear_seating
+from seating_logic_university import allocate_university_seating
 
 connection_string = "mongodb+srv://avanthikapraveen:avanthikapraveen@miniproject.dqiy1p3.mongodb.net/?appName=Miniproject"
 client = MongoClient(connection_string)
@@ -37,23 +39,23 @@ def admin_upload():
     error = None
 
     if request.method == "POST":
+        # --- HANDLER 1: REGULAR STUDENTS (Multi-year) ---
         if "upload_students" in request.form:
             file = request.files.get("students_csv")
             if not file or file.filename == "":
-                error = "Please choose a Students CSV file to upload."
+                error = "Please choose a Students CSV file."
             else:
                 try:
                     content = file.stream.read().decode("utf-8")
                     reader = csv.DictReader(StringIO(content))
                     required_fields = {"student_id", "dept", "year", "div", "name"}
                     if not required_fields.issubset(reader.fieldnames or []):
-                        error = "Students CSV must contain columns: student_id, dept, year, div, name."
+                        error = "CSV must contain: student_id, dept, year, div, name."
                     else:
                         docs = []
                         for row in reader:
-                            if not row.get("student_id"):
-                                continue
-                            doc = {
+                            if not row.get("student_id"): continue
+                            docs.append({
                                 "student_id": row["student_id"].strip().upper(),
                                 "dept": row["dept"].strip(),
                                 "year": int(row["year"]),
@@ -61,71 +63,131 @@ def admin_upload():
                                 "name": row["name"].upper(),
                                 "room_no": None,
                                 "seat_no": None,
-                            }
-                            docs.append(doc)
+                                "type": "regular"
+                            })
                         if docs:
                             db.drop_collection("students")
-                            global students_collection
-                            students_collection = db["students"]
-                            students_collection.insert_many(docs)
-                            message = f"Uploaded {len(docs)} students successfully."
-                        else:
-                            error = "No valid student records found in the CSV."
+                            db.students.insert_many(docs)
+                            message = f"Uploaded {len(docs)} regular students successfully."
                 except Exception as e:
-                    error = f"Error processing Students CSV: {e}"
+                    error = f"Error: {e}"
 
-        elif "upload_halls" in request.form:
-            file = request.files.get("halls_csv")
+        # --- HANDLER 2: UNIVERSITY STUDENTS (3year_sem.csv format) ---
+        elif "upload_university" in request.form:
+            file = request.files.get("university_csv")
             if not file or file.filename == "":
-                error = "Please choose a Halls CSV file to upload."
+                error = "Please choose the University CSV file."
             else:
                 try:
                     content = file.stream.read().decode("utf-8")
                     reader = csv.DictReader(StringIO(content))
-                    required_fields = {"room_no", "capacity", "no_of_rows", "no_of_columns"}
+                    required_fields = {"reg_no", "dept", "student_name"}
                     if not required_fields.issubset(reader.fieldnames or []):
-                        error = "Halls CSV must contain columns: room_no, capacity, no_of_rows, no_of_columns."
+                        error = "University CSV must contain: reg_no, dept, student_name."
                     else:
-                        rooms_collection = db["rooms"]
                         docs = []
                         for row in reader:
-                            if not row.get("room_no"):
-                                continue
-                            doc = {
+                            if not row.get("reg_no"): continue
+                            docs.append({
+                                "student_id": row["reg_no"].strip().upper(),
+                                "dept": row["dept"].strip(),
+                                "name": row["student_name"].upper(),
+                                "year": None,
+                                "div": None,
+                                "room_no": None,
+                                "seat_no": None,
+                                "type": "university"
+                            })
+                        if docs:
+                            db.drop_collection("students")
+                            db.students.insert_many(docs)
+                            message = f"Uploaded {len(docs)} university students successfully."
+                except Exception as e:
+                    error = f"Error: {e}"
+
+        # --- HANDLER 3: FIRST YEAR INTERNAL (Specific Constraints) ---
+        elif "upload_firstyear" in request.form:
+            file = request.files.get("firstyear_csv")
+            if not file or file.filename == "":
+                error = "Please choose the First Year CSV file."
+            else:
+                try:
+                    content = file.stream.read().decode("utf-8")
+                    reader = csv.DictReader(StringIO(content))
+                    required_fields = {"student_id", "dept", "name"}
+                    if not required_fields.issubset(reader.fieldnames or []):
+                        error = "First Year CSV must contain: student_id, dept, name."
+                    else:
+                        docs = []
+                        for row in reader:
+                            if not row.get("student_id"): continue
+                            docs.append({
+                                "student_id": row["student_id"].strip().upper(),
+                                "dept": row["dept"].strip(),
+                                "name": row["name"].upper(),
+                                "year": 1, 
+                                "div": None,
+                                "room_no": None,
+                                "seat_no": None,
+                                "type": "firstyear"
+                            })
+                        if docs:
+                            db.drop_collection("students")
+                            db.students.insert_many(docs)
+                            message = f"Uploaded {len(docs)} first-year students successfully."
+                except Exception as e:
+                    error = f"Error: {e}"
+
+        # --- HANDLER 4: HALLS ---
+        elif "upload_halls" in request.form:
+            file = request.files.get("halls_csv")
+            if not file or file.filename == "":
+                error = "Please choose a Halls CSV file."
+            else:
+                try:
+                    content = file.stream.read().decode("utf-8")
+                    reader = csv.DictReader(StringIO(content))
+                    if not {"room_no", "no_of_rows", "no_of_columns"}.issubset(reader.fieldnames or []):
+                        error = "Halls CSV missing required columns."
+                    else:
+                        docs = []
+                        for row in reader:
+                            if not row.get("room_no"): continue
+                            docs.append({
                                 "room_no": row["room_no"].strip(),
-                                "capacity": int(row["capacity"]),
                                 "no_of_rows": int(row["no_of_rows"]),
                                 "no_of_columns": int(row["no_of_columns"]),
-                            }
-                            docs.append(doc)
+                                "capacity": int(row.get("capacity", 0))
+                            })
                         if docs:
                             db.drop_collection("rooms")
-                            rooms_collection = db["rooms"]
-                            rooms_collection.insert_many(docs)
+                            db.rooms.insert_many(docs)
                             message = f"Uploaded {len(docs)} halls successfully."
-                        else:
-                            error = "No valid hall records found in the CSV."
                 except Exception as e:
-                    error = f"Error processing Halls CSV: {e}"
+                    error = f"Error: {e}"
 
     return render_template("admin_upload.html", message=message, error=error)
 
 @app.route("/admin/allocate")
 def admin_allocate():
-    """
-    Admin dashboard for seating.
-    Runs the logic that ensures sequential vertical and randomized horizontal seating.
-    """
     allocate_seating(db)
     last_generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return render_template("admin_allocate.html", last_generated=last_generated)
+    return render_template("admin_allocate.html", last_generated=last_generated, exam_type="Regular")
 
+@app.route("/admin/allocate-university")
+def admin_allocate_university():
+    allocate_university_seating(db)
+    last_generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return render_template("admin_allocate.html", last_generated=last_generated, exam_type="University")
+
+@app.route("/admin/allocate-firstyear")
+def admin_allocate_firstyear():
+    allocate_firstyear_seating(db)
+    last_generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return render_template("admin_allocate.html", last_generated=last_generated, exam_type="First Year Internal")
 
 @app.route("/admin/download-seating-pdf")
 def download_seating_pdf():
-    """
-    Generate and download a PDF of the current seating arrangement (Room Matrix).
-    """
     pdf_buffer = generate_seating_pdf(db)
     return send_file(
         pdf_buffer,
@@ -136,9 +198,6 @@ def download_seating_pdf():
 
 @app.route("/admin/download-attendance-pdf")
 def download_attendance_pdf():
-    """
-    Generate and download the attendance sheets (Sequential by class/ID).
-    """
     pdf_buffer = generate_attendance_pdf(db)
     return send_file(
         pdf_buffer,
