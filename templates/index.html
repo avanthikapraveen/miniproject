@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Search - Smart Class Timetable & Exam Hall Seating</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Smart Class Timetable & Exam Hall Seating Management System</h1>
+            <h2>Student Search</h2>
+        </div>
+        
+        <div class="search-box">
+            <form action="{{ url_for('search') }}" method="POST">
+                <div class="form-group">
+                    <label for="registration_number">Enter Student ID:</label>
+                    <input 
+                        type="text" 
+                        id="registration_number" 
+                        name="registration_number" 
+                        placeholder="e.g., CS23C01"
+                        required
+                        autofocus
+                    >
+                </div>
+                
+                {% if error %}
+                <div class="error-message">
+                    {{ error }}
+                </div>
+                {% endif %}
+                
+                <button type="submit" class="btn-search">Search</button>
+            </form>
+        </div>
+        
+        <div class="footer">
+            <p>Enter your registration number to find your exam details</p>
+        </div>
+    </div>
+</body>
+</html>

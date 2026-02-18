@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Result - Smart Class Timetable & Exam Hall Seating</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Smart Class Timetable & Exam Hall Seating Management System</h1>
+            <h2>Student Search Result</h2>
+        </div>
+        
+        <div class="result-box">
+            <div class="result-header">
+                <h3>Student Details Found</h3>
+            </div>
+            
+            <div class="result-content">
+                <div class="info-row">
+                    <span class="label">Student ID:</span>
+                    <span class="value">{{ registration_number }}</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="label">Room Number:</span>
+                    <span class="value">{{ student_info.room_no }}</span>
+                </div>
+                
+                <div class="info-row highlight">
+                    <span class="label">Seat Number:</span>
+                    <span class="value">{{ student_info.seat_no }}</span>
+                </div>
+            </div>
+            
+            <div class="result-actions">
+                <a href="{{ url_for('index') }}" class="btn-back">Search Another Student</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
